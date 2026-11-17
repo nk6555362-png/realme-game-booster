@@ -1,0 +1,368 @@
+name: Build APK
+on: [workflow_dispatch, push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Generate Project & Build
+        run: |
+          mkdir -p app/src/main/java/com/realme/gamebooster app/src/main/res/layout
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
+          rootProject.name = "Realme15ProBooster"
+          include(":app")
+          EOF
+
+          cat << 'EOF' > build.gradle.kts
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+          }
+          EOF
+
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          EOF
+
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+          android {
+              namespace = "com.realme.gamebooster"
+              compileSdk = 35
+              defaultConfig {
+                  applicationId = "com.realme.gamebooster"
+                  minSdk = 29
+                  targetSdk = 35
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = "17" }
+          }
+          dependencies {
+              implementation("androidx.core:core-ktx:1.13.1")
+              implementation("androidx.appcompat:appcompat:1.7.0")
+              implementation("com.google.android.material:material:1.12.0")
+              implementation("androidx.recyclerview:recyclerview:1.3.2")
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools"
+              package="com.realme.gamebooster">
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+              <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+              <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+              <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+              <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+              <application android:allowBackup="true" android:label="Realme 15 Pro Booster UI 7" android:theme="@style/Theme.Material3.Dark.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <service android:name=".GameOverlayService" android:enabled="true" android:exported="false" android:foregroundServiceType="specialUse">
+                      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Game overlay" />
+                  </service>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="match_parent"
+              android:background="#121417" android:orientation="vertical" android:padding="16dp">
+              <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                  android:text="Realme 15 Pro Game Booster" android:textColor="#FFFFFF" android:textSize="20sp" android:textStyle="bold" />
+              <Button android:id="@+id/btnStartOverlay" android:layout_width="match_parent" android:layout_height="48dp"
+                  android:layout_marginTop="12dp" android:backgroundTint="#00E676" android:text="Запустить игровой оверлей" android:textColor="#000000" android:textStyle="bold" />
+              <EditText android:id="@+id/etSearch" android:layout_width="match_parent" android:layout_height="44dp"
+                  android:layout_marginTop="12dp" android:background="#1E2228" android:hint="Поиск игры..." android:paddingHorizontal="12dp"
+                  android:singleLine="true" android:textColor="#FFFFFF" android:textColorHint="#78909C" />
+              <com.google.android.material.switchmaterial.SwitchMaterial android:id="@+id/switchShowAllApps"
+                  android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+                  android:text="Показать все приложения" android:textColor="#CFD8DC" />
+              <androidx.recyclerview.widget.RecyclerView android:id="@+id/rvGames" android:layout_width="match_parent"
+                  android:layout_height="0dp" android:layout_marginTop="8dp" android:layout_weight="1" />
+          </LinearLayout>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/layout/item_game.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginVertical="4dp"
+              android:background="#1B1F24" android:gravity="center_vertical" android:orientation="horizontal" android:padding="10dp">
+              <ImageView android:id="@+id/ivAppIcon" android:layout_width="42dp" android:layout_height="42dp" />
+              <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginHorizontal="12dp" android:layout_weight="1" android:orientation="vertical">
+                  <TextView android:id="@+id/tvAppName" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="15sp" android:textStyle="bold" />
+                  <TextView android:id="@+id/tvPackageName" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#78909C" android:textSize="11sp" />
+              </LinearLayout>
+              <CheckBox android:id="@+id/cbSelected" android:layout_width="wrap_content" android:layout_height="wrap_content" android:buttonTint="#00E676" />
+          </LinearLayout>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/layout/overlay_hud.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:id="@+id/overlay_root" android:layout_width="wrap_content" android:layout_height="wrap_content"
+              android:background="#CC121417" android:orientation="vertical" android:padding="10dp">
+              <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+                  <TextView android:id="@+id/tvFps" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="120 FPS" android:textColor="#00E676" android:textSize="14sp" android:textStyle="bold" />
+                  <TextView android:id="@+id/tvTemp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:text="36.5°C" android:textColor="#B0BEC5" android:textSize="12sp" />
+                  <TextView android:id="@+id/btnExpand" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:paddingHorizontal="6dp" android:text="⚙" android:textColor="#FFFFFF" android:textSize="14sp" />
+              </LinearLayout>
+              <LinearLayout android:id="@+id/panelControls" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="vertical" android:visibility="gone">
+                  <Button android:id="@+id/btnMode" android:layout_width="match_parent" android:layout_height="36dp" android:backgroundTint="#FFAB00" android:text="Режим: Баланс" android:textColor="#000000" android:textSize="11sp" />
+                  <Button android:id="@+id/btnBoostRam" android:layout_width="match_parent" android:layout_height="36dp" android:layout_marginTop="4dp" android:backgroundTint="#2979FF" android:text="Очистить фон + DND" android:textColor="#FFFFFF" android:textSize="11sp" />
+              </LinearLayout>
+          </LinearLayout>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/realme/gamebooster/GamePrefs.kt
+          package com.realme.gamebooster
+          import android.content.Context
+          object GamePrefs {
+              private const val PREFS_NAME = "realme_game_booster_prefs"
+              private const val KEY_SELECTED_GAMES = "selected_game_packages"
+              fun getSelectedGames(context: Context): MutableSet<String> {
+                  val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                  return prefs.getStringSet(KEY_SELECTED_GAMES, emptySet())?.toMutableSet() ?: mutableSetOf()
+              }
+              fun toggleGame(context: Context, packageName: String, isSelected: Boolean) {
+                  val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                  val current = getSelectedGames(context)
+                  if (isSelected) current.add(packageName) else current.remove(packageName)
+                  prefs.edit().putStringSet(KEY_SELECTED_GAMES, current).apply()
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/realme/gamebooster/GameAdapter.kt
+          package com.realme.gamebooster
+          import android.graphics.drawable.Drawable
+          import android.view.*
+          import android.widget.*
+          import androidx.recyclerview.widget.RecyclerView
+          data class AppItem(val name: String, val packageName: String, val icon: Drawable, val isGameCategory: Boolean, var isSelected: Boolean)
+          class GameAdapter(private var items: List<AppItem>, private val onToggle: (AppItem, Boolean) -> Unit) : RecyclerView.Adapter<GameAdapter.GameViewHolder>() {
+              class GameViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+                  val ivIcon: ImageView = view.findViewById(R.id.ivAppIcon)
+                  val tvName: TextView = view.findViewById(R.id.tvAppName)
+                  val tvPackage: TextView = view.findViewById(R.id.tvPackageName)
+                  val cbSelected: CheckBox = view.findViewById(R.id.cbSelected)
+              }
+              override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = GameViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.item_game, parent, false))
+              override fun onBindViewHolder(holder: GameViewHolder, position: Int) {
+                  val item = items[position]
+                  holder.ivIcon.setImageDrawable(item.icon)
+                  holder.tvName.text = item.name
+                  holder.tvPackage.text = item.packageName
+                  holder.cbSelected.setOnCheckedChangeListener(null)
+                  holder.cbSelected.isChecked = item.isSelected
+                  holder.itemView.setOnClickListener {
+                      item.isSelected = !item.isSelected
+                      holder.cbSelected.isChecked = item.isSelected
+                      onToggle(item, item.isSelected)
+                  }
+                  holder.cbSelected.setOnCheckedChangeListener { _, isChecked -> item.isSelected = isChecked; onToggle(item, isChecked) }
+              }
+              override fun getItemCount() = items.size
+              fun updateList(newItems: List<AppItem>) { items = newItems; notifyDataSetChanged() }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/realme/gamebooster/MainActivity.kt
+          package com.realme.gamebooster
+          import android.Manifest
+          import android.app.*
+          import android.content.*
+          import android.content.pm.*
+          import android.net.Uri
+          import android.os.*
+          import android.provider.Settings
+          import android.text.*
+          import android.widget.*
+          import androidx.appcompat.app.AppCompatActivity
+          import androidx.core.app.ActivityCompat
+          import androidx.core.content.ContextCompat
+          import androidx.recyclerview.widget.*
+          import com.google.android.material.switchmaterial.SwitchMaterial
+          import kotlin.concurrent.thread
+          class MainActivity : AppCompatActivity() {
+              private lateinit var adapter: GameAdapter
+              private var allInstalledApps: List<AppItem> = emptyList()
+              private var showAllApps = false
+              private var searchQuery = ""
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_main)
+                  val btnStart: Button = findViewById(R.id.btnStartOverlay)
+                  val etSearch: EditText = findViewById(R.id.etSearch)
+                  val switchAll: SwitchMaterial = findViewById(R.id.switchShowAllApps)
+                  val rvGames: RecyclerView = findViewById(R.id.rvGames)
+                  adapter = GameAdapter(emptyList()) { item, isChecked -> GamePrefs.toggleGame(this, item.packageName, isChecked) }
+                  rvGames.layoutManager = LinearLayoutManager(this)
+                  rvGames.adapter = adapter
+                  btnStart.setOnClickListener { checkPermissionsAndStart() }
+                  switchAll.setOnCheckedChangeListener { _, isChecked -> showAllApps = isChecked; applyFilters() }
+                  etSearch.addTextChangedListener(object : TextWatcher {
+                      override fun afterTextChanged(s: Editable?) { searchQuery = s?.toString()?.trim()?.lowercase() ?: ""; applyFilters() }
+                      override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                      override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                  })
+                  loadInstalledApps()
+              }
+              private fun loadInstalledApps() {
+                  thread {
+                      val pm = packageManager
+                      val savedPackages = GamePrefs.getSelectedGames(this)
+                      val loaded = pm.getInstalledApplications(PackageManager.GET_META_DATA).mapNotNull { appInfo ->
+                          if (appInfo.packageName == packageName || pm.getLaunchIntentForPackage(appInfo.packageName) == null) return@mapNotNull null
+                          val isGame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) appInfo.category == ApplicationInfo.CATEGORY_GAME else false
+                          AppItem(pm.getApplicationLabel(appInfo).toString(), appInfo.packageName, pm.getApplicationIcon(appInfo), isGame, savedPackages.contains(appInfo.packageName))
+                      }.sortedWith(compareByDescending<AppItem> { it.isSelected }.thenByDescending { it.isGameCategory }.thenBy { it.name.lowercase() })
+                      runOnUiThread { allInstalledApps = loaded; applyFilters() }
+                  }
+              }
+              private fun applyFilters() {
+                  adapter.updateList(allInstalledApps.filter { (showAllApps || it.isGameCategory || it.isSelected) && (searchQuery.isEmpty() || it.name.lowercase().contains(searchQuery) || it.packageName.lowercase().contains(searchQuery)) })
+              }
+              private fun checkPermissionsAndStart() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                      ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100); return
+                  }
+                  if (!Settings.canDrawOverlays(this)) { startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))); return }
+                  val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+                  if (appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), packageName) != AppOpsManager.MODE_ALLOWED) {
+                      startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)); return
+                  }
+                  val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                  if (!pm.isIgnoringBatteryOptimizations(packageName)) { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))); return }
+                  val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                  if (!nm.isNotificationPolicyAccessGranted) { startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)); return }
+                  startForegroundService(Intent(this, GameOverlayService::class.java))
+                  Toast.makeText(this, "Оверлей активен!", Toast.LENGTH_LONG).show()
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/realme/gamebooster/GameOverlayService.kt
+          package com.realme.gamebooster
+          import android.app.*
+          import android.app.usage.UsageStatsManager
+          import android.content.*
+          import android.content.pm.ServiceInfo
+          import android.graphics.PixelFormat
+          import android.os.*
+          import android.view.*
+          import android.widget.*
+          import androidx.core.app.NotificationCompat
+          import androidx.core.app.ServiceCompat
+          class GameOverlayService : Service() {
+              private lateinit var windowManager: WindowManager
+              private lateinit var overlayView: View
+              private lateinit var tvFps: TextView
+              private lateinit var tvTemp: TextView
+              private lateinit var panelControls: LinearLayout
+              private lateinit var btnMode: Button
+              private val handler = Handler(Looper.getMainLooper())
+              private var frameCount = 0
+              private var lastTimeNs = 0L
+              private var currentMode = 1
+              private val frameCallback = object : Choreographer.FrameCallback {
+                  override fun doFrame(frameTimeNanos: Long) {
+                      if (lastTimeNs == 0L) lastTimeNs = frameTimeNanos
+                      frameCount++
+                      val diffNs = frameTimeNanos - lastTimeNs
+                      if (diffNs >= 1_000_000_000L) {
+                          tvFps.text = "${(frameCount * 1_000_000_000L / diffNs).toInt()} FPS"
+                          frameCount = 0; lastTimeNs = frameTimeNanos
+                          val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                          tvTemp.text = "${(intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0) / 10f}°C"
+                      }
+                      if (overlayView.visibility == View.VISIBLE) Choreographer.getInstance().postFrameCallback(this)
+                  }
+              }
+              override fun onCreate() {
+                  super.onCreate()
+                  val channelId = "realme_ui7_booster"
+                  getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel(channelId, "Game Booster", NotificationManager.IMPORTANCE_LOW))
+                  val notification = NotificationCompat.Builder(this, channelId).setContentTitle("Game Booster").setContentText("Активен").setSmallIcon(android.R.drawable.ic_media_play).setOngoing(true).build()
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) ServiceCompat.startForeground(this, 101, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(101, notification)
+                  windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+                  overlayView = LayoutInflater.from(this).inflate(R.layout.overlay_hud, null)
+                  val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply {
+                      gravity = Gravity.TOP or Gravity.START; x = 50; y = 100
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                  }
+                  tvFps = overlayView.findViewById(R.id.tvFps); tvTemp = overlayView.findViewById(R.id.tvTemp)
+                  panelControls = overlayView.findViewById(R.id.panelControls); btnMode = overlayView.findViewById(R.id.btnMode)
+                  overlayView.findViewById<TextView>(R.id.btnExpand).setOnClickListener { panelControls.visibility = if (panelControls.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
+                  btnMode.setOnClickListener { currentMode = (currentMode + 1) % 3; btnMode.text = listOf("Режим: Эко", "Режим: Баланс", "Режим: GT Max")[currentMode]; if (currentMode == 2) suppressBg() }
+                  overlayView.findViewById<Button>(R.id.btnBoostRam).setOnClickListener { suppressBg() }
+                  var initX = 0; var initY = 0; var touchX = 0f; var touchY = 0f
+                  overlayView.setOnTouchListener { _, event ->
+                      when (event.action) {
+                          MotionEvent.ACTION_DOWN -> { initX = params.x; initY = params.y; touchX = event.rawX; touchY = event.rawY; true }
+                          MotionEvent.ACTION_MOVE -> { params.x = initX + (event.rawX - touchX).toInt(); params.y = initY + (event.rawY - touchY).toInt(); windowManager.updateViewLayout(overlayView, params); true }
+                          else -> false
+                      }
+                  }
+                  overlayView.visibility = View.GONE
+                  windowManager.addView(overlayView, params)
+                  handler.post(object : Runnable {
+                      override fun run() {
+                          val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                          val time = System.currentTimeMillis()
+                          val topPkg = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 10_000, time)?.maxByOrNull { it.lastTimeUsed }?.packageName ?: ""
+                          val isGame = GamePrefs.getSelectedGames(this@GameOverlayService).contains(topPkg)
+                          if (isGame && overlayView.visibility != View.VISIBLE) { overlayView.visibility = View.VISIBLE; lastTimeNs = 0L; frameCount = 0; Choreographer.getInstance().postFrameCallback(frameCallback); suppressBg() }
+                          else if (!isGame && overlayView.visibility == View.VISIBLE) { overlayView.visibility = View.GONE }
+                          handler.postDelayed(this, 1500)
+                      }
+                  })
+              }
+              private fun suppressBg() {
+                  val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                  val games = GamePrefs.getSelectedGames(this)
+                  am.runningAppProcesses?.forEach { p -> p.pkgList?.forEach { pkg -> if (pkg != packageName && !games.contains(pkg)) am.killBackgroundProcesses(pkg) } }
+                  val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                  if (nm.isNotificationPolicyAccessGranted) nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+                  Toast.makeText(this, "Фоновые процессы очищены + DND", Toast.LENGTH_SHORT).show()
+              }
+              override fun onDestroy() { super.onDestroy(); if (::overlayView.isInitialized) windowManager.removeView(overlayView) }
+              override fun onBind(intent: Intent?) = null
+          }
+          EOF
+
+          gradle assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Realme15ProBooster-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
